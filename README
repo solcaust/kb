@@ -1,4 +1,43 @@
-This is my first public project.  I have a start, but there is a bunch more stuff that could be done.  
+Description
+
+A very simple knowledge base application.  Stores data files with meta data to track entries and changes.
+
+Plans for v1
+
+*These are the plans I have for v1.  Just some simple stuff I would like to see completed before it is considered stable and ready for use.
+
+1) Seperated config file 
+	- assume default locatio of "../etc/kb.conf"
+	- allow config to be passwd via command line "-x <config file"
+	- config should support multipile data stores (v1 will not include full support)
+2) Abstract the manegment of files and meta data to module/pm
+	- use OOP in the modules to interact with KBINFO
+	- proper implementation will ensure multipile objects can be loaded
+3) Full command line support for:
+	- creating new entry from <STDIN>
+	- export an entry to <STDOUT> or file
+	- list current entries
+	- edit an entry
+4) Be aware of userid (future would allow for multi user environment)
+	- proper locking when editing
+	- track user sessions connected to a Data Store
+	- single user id (non-root) for ownership of Data Store
+5) Error checking - currently assumes everything works. Very bad model
+	- creation, delete, edit, etc...
+6) Debug statements
+	- standard modules for reporting DEBUG info
+	- Allow debug data to go to file
+
+Plans for v2
+
+*Bigger grand ideas that may never happen
+
+1) Fully abstract file/meta management
+	- allow for other methods to store data DB, Network, etc...
+2) Abstract the "engine" creating tiers
+	- Tier 1: Data Store - currently file
+	- Tier 2: kbengine - currently script
+	- Tier 3: Presentation - currently single script
+3) Security for users - multipile users
 
 - Solcaust
-
