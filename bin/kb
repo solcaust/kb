@@ -84,8 +84,8 @@ my %KBINFO;
 #
 ############## Start Body ##########################
 #
-print "loading kbinfo\n";
-LoadKB($kbdir, \%KBINFO);
+#print "loading kbinfo\n";
+#LoadKB($kbdir, \%KBINFO);
 
 ####  Command passing should be handled here!
 ####  To be supported command line options
@@ -414,8 +414,8 @@ sub comrun {
 			LoadKB($lkbdir, $lkbinfo);
 			print "\n";
 		}
-		case /reload/i {
-			print "...reloading...";   
+		case /reload|load/i {
+			print "..." . $lcmd . "...";   
 			LoadKB($lkbdir, $lkbinfo);
 			print "\n";
 		}
