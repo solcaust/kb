@@ -1,0 +1,11 @@
+<ID>127</ID>
+<param>
+	<created>Thu Oct 21 21:51:46 2010</created>
+	<info>/Users/chuck/Projects/kb/info/kb.127.info</info>
+	<user>chuck</user>
+	<title>test entry</title>
+	<data>/Users/chuck/Projects/kb/data/kb.127.data</data>
+	<updates>1::</updates>
+	<updates>ARRAY(0x801710)</updates>
+	<description>This is just a test entry, nothing more</description>
+</param>
