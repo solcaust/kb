@@ -1,0 +1,490 @@
+#!/bin/sh -- # -*- perl -*-
+#
+# eval statement to find and execute perl
+#
+eval '
+if [ -x /app00/perl/bin/perl ]
+then
+	exec /app00/perl/bin/perl $0 ${1+"$@"} ;
+elif [ -x /usr/local/bin/perl ]
+then
+	exec /usr/local/bin/perl $0 ${1+"$@"} ;
+elif [ -x /usr/bin/perl ]
+then
+	exec /usr/bin/perl $0 ${1+"$@"} ;
+fi'	
+if 0;
+############## Start Summary #######################
+#
+# Author: solcaust
+# Date: 10/22/2010
+# Notes: This will be the server process for kb.  Orignal code pulled from the all-in-one kb
+#
+# solcaust	10/22/2010	First write
+#
+############## End Summary #########################
+#
+############## Start Globals #######################
+#
+### Modules ###
+#use strict;
+use Getopt::Long;
+use Switch;
+use Data::Dumper;
+use File::Copy;
+use Cwd 'abs_path';
+use File::Basename;
+use XML::Simple;
+
+### Version Information ###
+my $MAJOR = 0;
+my $MINOR = 3;
+my $RELEASE = 5;
+my @ver = ($MAJOR, $MINOR, $RELEASE);
+
+### Global Variables ###
+my ($kbexe, $kbhome) =fileparse(abs_path($0));
+$kbhome =~ s/\/bin\///;
+my $debug=0;
+my $command;
+my $option;
+my $version;
+my $kbdir = $kbhome;
+my @kbfiles;
+my $user = getlogin();
+
+### Command Line Options ###
+GetOptions( "debug+"=>\$debug,
+            "command:s",\$command,
+            "xconfig:s",\$config,
+            "option:s",\$option,
+            "directory:s",\$kbdir,
+            "version",\$version);
+
+print "debug: " . $debug . "\n" if $debug > 0;
+print "command: " . $command . "\n" if $debug > 0;
+print "option: " . $option . "\n" if $debug > 0;
+print "version: " . $version . "\n" if $debug > 0;
+print "base directory: " . $kbdir . "\n" if $debug > 0;
+
+# Declare Global Hashes
+my %KBINFO;
+# $KBINFO{<ID>}
+#	<title>
+#	<description>
+#	<user>
+#	<created>
+#	<info>
+#	<data>
+#	<@updates>
+#
+############## End Globals #########################
+#
+############## Start Body ##########################
+#
+#print "loading kbinfo\n";
+#LoadKB($kbdir, \%KBINFO);
+
+####  Command passing should be handled here!
+####  To be supported command line options
+# - piping in content for new entry
+# - appending content to existing entry
+# - view entry - write to STDOUT for pipe or export
+# - edit entry
+###  Will not be supported on command line
+# - delete an entry
+
+print "help - for command and usage\n";
+my $lcnt = 1;
+while () {
+	print "{" . $lcnt . "} " . $user . " \# ";
+	my $entry = <stdin>; chomp($cmd);
+	my @params = split(/\s+/, $entry);
+	my $cmd = shift(@params);
+
+	if ( $cmd =~ /exit|quit/i ) { print "\ngoodbye\n"; exit 0; }
+
+	comrun($cmd, $kbdir, \%KBINFO, $user, @params);
+	$lcnt++;
+}
+#
+############## End Body ############################
+#
+############## Start Modules #######################
+#
+sub readin {
+	my $ltext = $_[0];
+	
+	print $ltext;
+	my $input = <STDIN>;
+	chomp($input);
+
+	return $input;
+} # end sub readin
+#
+sub create {
+	my $lkbdir = $_[0];
+	my $linfodir = $lkbdir . "/info";
+	my $ldatadir = $lkbdir . "/data";
+	my $lconfdir = $lkbdir . "/etc";
+	my $lkbid = $lconfdir . "/.id";
+	my $lkblock = $lkbid . ".lock";
+	my %KBINFO;
+
+	my $ID = getid($lkbdir);
+	unless ( $ID gt 0 ) { return 0; }
+
+	print "New ID: " . $ID . "\n";
+	foreach $param ('title', 'description') { 
+		$KBINFO{$ID}{$param} = readin($param . ": ");	
+	}
+	$KBINFO{$ID}{'user'} = getlogin();
+	$KBINFO{$ID}{'created'} = localtime;
+	$KBINFO{$ID}{'info'} = $linfodir . "/kb." . $ID . ".info";
+	$KBINFO{$ID}{'data'} = $ldatadir . "/kb." . $ID . ".data";
+	
+	unless ( write_info(\%KBINFO, $ID) == 0 ) {
+		print "ERROR: failed to create info file - " . $KBINFO{$ID}{'info'} . "\n";
+	} else {
+		touch($KBINFO{$ID}{'data'});
+	}
+	
+	return 0;
+} # end sub create
+#
+sub write_info {
+	my $lkbinfo = $_[0];
+	my $lid = $_[1];
+	my $err = 0;
+
+	#print Dumper(%{$lkbinfo}) . "\n";
+
+	
+	open(KBINFO, "> $lkbinfo->{$lid}{'info'}") or $err++;
+	print KBINFO "<ID>" . $lid . "</ID>\n";
+	print KBINFO "<param>\n";
+	for $param ( keys %{$lkbinfo->{$lid}} ) {
+		if ( $param =~ /updates/ ) {
+			foreach $lentry ( @{$lkbinfo->{$lid}{$param}} ) {
+				my ($user, $date) = split("::", @{$lkbinfo->{$lid}{$param}});
+				my $data = $user . "::" . $date;
+				print KBINFO "\t<updates>" . $data . "</updates>\n";
+			}
+		}
+		print KBINFO "\t<" . $param . ">";
+		print KBINFO $lkbinfo->{$lid}{$param};
+		print KBINFO "</" . $param . ">\n";
+	}	
+	print KBINFO "</param>\n";
+	close(KBINFO);
+
+	return $err;	
+} # end sub write_info
+#
+sub getid {
+	my $lkbdir = $_[0];
+	my $linfodir = $lkbdir . "/info";
+	my $ldatadir = $lkbdir . "/data";
+	my $lconfdir = $lkbdir . "/etc";
+	my $lkbid = $lconfdir . "/.id";
+	my $lkblock = $lkbid . ".lock";
+
+	my $tcnt = 1;
+        while ( -f $lkblock & $tcnt lt 5 ) {
+                print "ID locked - (try $tcnt) retry in 5 seconds - $lkblock\n";
+                $tcnt++;
+                sleep 5;
+        }
+
+        if ( -f $lkblock ) {
+                print "ID locked - failed to get new ID number\n";
+                return 1;
+        } else {
+                touch($lkblock);
+        }
+
+        # Get ID / Increment ID / Write new ID
+        open (ID, "< $lkbid") or die $!;
+        my $ID = <ID>; chomp($ID);
+        close (ID);
+
+        # Increment and Write
+        my $NID = $ID; $NID++;
+        open (ID, "> $lkbid") or die $!;
+        print ID $NID;
+        close (ID);
+
+        # release lock
+        unlink($lkblock);
+
+	return $ID
+} # end sub getid
+#
+sub DelKB {
+	# module to delete KB entry
+	my $lkbinfo = $_[0];
+	my $lid = $_[1];
+
+	unless ( -f $lkbinfo->{$lid}{'data'} | -f $lkbinfo->{$lid}{'info'} ) {
+		print "ERROR: failed to locate data or info file - \n\t" . $lkbinfo->{'data'} . "\n\t" .  $lkbinfo->{'info'} . "\n";
+	}
+	print "INFO: removing info file - " .  $lkbinfo->{$lid}{'info'} . "\n";
+	my $lcmd = "/usr/bin/rm " . $lkbinfo->{$lid}{'info'};
+	system($lcmd);
+	print "INFO: removing data file - " .  $lkbinfo->{$lid}{'data'} . "\n";
+	my $lcmd = "/usr/bin/rm " . $lkbinfo->{$lid}{'data'};
+	system($lcmd);
+
+	delete $lkbinfo->{$lid};
+
+}
+#
+sub PrintInfo {
+	# module to print KB info based on ID number
+	my $lkbinfo = $_[0];
+	my $lid = $_[1];
+	my $lform = $_[2];
+
+	unless ( -f $lkbinfo->{$lid}{'info'} ) {
+		print "ERROR: failed to locate info file - " . $lkbinfo->{$lid}{'info'} . "\n";
+		return 1;
+	}
+
+	unless ( $lform =~ /raw/i ) {
+		print "\nMetadata for KB entry: " . $lid . "\n";
+		print "Title: " . $lkbinfo->{$lid}{'title'} . "\n";
+		print "Owner: " . $lkbinfo->{$lid}{'user'} . "\n";
+		print "Data File: " . $lkbinfo->{$lid}{'data'} . "\n";
+		print "Information File: " . $lkbinfo->{$lid}{'info'} . "\n";
+		print "Description: " . $lkbinfo->{$lid}{'description'} . "\n";
+		my $ucnt = 1;
+		foreach $lentry ( @{$lkbinfo->{$lid}{'updates'}} ) {
+			my ($user, $date) = split("::", $lentry);
+			print "- update (" . $ucnt . ") " . $user . " :: " . $date . "\n";
+			$ucnt++;
+		}
+		print "\n";
+	} else {
+		my $lcmd = "/usr/bin/more " . $lkbinfo->{$lid}{'info'};
+		system($lcmd);
+	}
+
+} # end of PrintInfo
+#
+sub EditData {
+	# module to edit KB entry based on ID number
+	my $lkbinfo = $_[0];
+	my $lid = $_[1];
+
+	unless ( -f $lkbinfo->{$lid}{'data'} ) {
+		print "ERROR: failed to locate data file - " . $lkbinfo->{$lid}{'data'} . "\n";
+		return 1;
+	} else {
+		$lupfile = $lkbinfo->{$lid}{'data'} . "." . $$;
+		copy($lkbinfo->{$lid}{'data'}, $lupfile);
+	}
+	my $lcmd = "/usr/bin/vi " . $lkbinfo->{$lid}{'data'};
+	my $lcmd = "/usr/bin/vi " . $lupfile;
+	system($lcmd);
+
+	$lcmd = "/usr/bin/diff " . $lkbinfo->{$lid}{'data'} . " " . $lupfile . " 1>/dev/null 2>&1";
+	$err = system($lcmd);
+
+	if ( $err gt 0 ) { 
+		UpdateInfo($lkbinfo, $lid);
+		move($lupfile, $lkbinfo->{$lid}{'data'});
+	} else { 
+		print "...no changes made"; 
+		unlink($lupfile);
+		print "\n";
+	}
+
+} # end of EditData
+#
+sub UpdateInfo {
+	my $lkbinfo = $_[0];
+	my $lid = $_[1];
+
+	print "...updating metadata";
+
+	my $update = getlogin();
+	$update = $update . "::" . localtime;
+
+	push(@{$lkbinfo->{$lid}{'updates'}}, $update);
+	write_info($lkbinfo, $lid);
+
+	print "\n";
+
+} # end of UpdateInfo
+#
+sub ViewData {
+	# module to view KB entry based on ID number
+	my $lkbinfo = $_[0];
+	my $lid = $_[1];
+
+	unless ( -f $lkbinfo->{$lid}{'data'} ) {
+		print "ERROR: failed to locate data file - " . $lkbinfo->{$lid}{'data'} . "\n";
+		return 1;
+	}
+	my $lcmd = "/usr/bin/view " . $lkbinfo->{$lid}{'data'};
+	system($lcmd);
+
+} # end of ViewData
+#
+sub search {
+# module to search KB entries based on search criteria
+
+}
+#
+sub LoadKB {
+	my $lkbdir = $_[0];
+	my $lkbinfo = $_[1];
+	my $linfodir = $lkbdir . "/info";
+	my $ldatadir = $lkbdir . "/data";
+	my $lconfdir = $lkbdir . "/etc";
+	my $ID = 0;
+
+	opendir(KBINFO, $linfodir) || die "unable to open $linfodir ";
+	@lkbfiles = grep { /^kb\.\d+?\.info$/} readdir(KBINFO);
+	close(KBINFO);
+
+	foreach $lkbfile (@lkbfiles) { 
+		my $fkbinfo = $linfodir . "/" . $lkbfile;
+
+		open(KBFILE, "$fkbinfo") or die "unable to open file: $fkbinfo\n";	
+		while (<KBFILE>) {
+			chomp;
+			if ( /^\<ID\>/ ) {
+				s/\<ID\>//g;
+				s/\<\/ID\>//g;
+				$ID = $_;
+			}
+
+			next unless $ID gt 0;
+
+			switch() {	
+				case /\<info\>/ {
+					s/\s*\<info\>//g; s/\<\/info\>//g;
+					$lkbinfo->{$ID}{'info'} = $_;
+				}
+				case /\<created\>/ {
+					s/\s*\<created\>//g; s/\<\/created\>//g;
+					$lkbinfo->{$ID}{'created'} = $_;
+				}
+				case /\<user\>/ {
+					s/\s*\<user\>//g; s/\<\/user\>//g;
+					$lkbinfo->{$ID}{'user'} = $_;
+				}
+				case /\<data\>/ {
+					s/\s*\<data\>//g; s/\<\/data\>//g;
+					$lkbinfo->{$ID}{'data'} = $_;
+				}
+				case /\<title\>/ {
+					s/\s*\<title\>//g; s/\<\/title\>//g;
+					$lkbinfo->{$ID}{'title'} = $_;
+				}
+				case /\<description\>/ {
+					s/\s*\<description\>//g; s/\<\/description\>//g;
+					$lkbinfo->{$ID}{'description'} = $_;
+				}
+				case /\<updates\>/ {
+					s/\s*\<updates\>//g; s/\<\/updates\>//g;
+					push(@{$lkbinfo->{$ID}{'updates'}}, $_);
+				}
+			}
+		}	
+	}
+}
+#
+sub comrun {
+	# module to run the commands passed on the command line or interactively
+	# This is where the magic happens
+	my $lcmd = shift(@_);
+	my $lkbdir = shift(@_);
+	my $lkbinfo = shift(@_);
+	my $luser = shift(@_);
+	my @lparams = @_;
+
+	switch($lcmd) {
+		case /create/i {
+			create($lkbdir);
+			print "...reloading...";   
+			LoadKB($lkbdir, $lkbinfo);
+			print "\n";
+		}
+		case /reload|load/i {
+			print "..." . $lcmd . "...";   
+			LoadKB($lkbdir, $lkbinfo);
+			print "\n";
+		}
+		case /dump/i {
+			print Dumper(%{$lkbinfo}) . "\n";
+		}
+		case /info/i {
+			my $id = shift(@lparams);
+			my $form = shift(@lparams);
+			unless ( $lkbinfo->{$id} ) {
+				print "ERROR: Invalid entry id  " . $id . "\n";
+				return 1;
+			} 
+			PrintInfo($lkbinfo, $id, $form);
+		}
+		case /delete/i {
+			my $id = shift(@lparams);
+			unless ( $lkbinfo->{$id} ) {
+				print "ERROR: Invalid entry id  " . $id . "\n";
+				return 1;
+			} else {
+				DelKB($lkbinfo, $id);
+			}
+			print "...reloading...";   
+			LoadKB($lkbdir, $lkbinfo);
+			print "\n";
+		}
+		case /edit/i {
+			#print $lcmd . " - " . join(", ", @lparams) . "\n";
+			my $id = shift(@lparams);
+			unless ( $lkbinfo->{$id} ) {
+				print "ERROR: Invalid entry id  " . $id . "\n";
+				return 1;
+			} else {
+				EditData($lkbinfo, $id);
+			}
+		}
+		case /update/i {
+			print "INFO: update kb entry\n";
+		}
+		case /view/i {
+			#print $lcmd . " - " . join(", ", @lparams) . "\n";
+			my $id = shift(@lparams);
+			unless ( $lkbinfo->{$id} ) {
+				print "ERROR: Invalid entry id  " . $id . "\n";
+				return 1;
+			} else {
+				ViewData($lkbinfo, $id);
+			}
+
+		}
+		case /list/i {
+			print "\nID - Title :: User :: Date Created\n";
+			foreach $ID ( sort(keys %{$lkbinfo}) ) {
+				print $ID . " -\t" . $lkbinfo->{$ID}{'title'} . " :: " . $lkbinfo->{$ID}{'user'} . " :: " . $lkbinfo->{$ID}{'created'} . "\n";	
+			}
+			print "\n";
+		}
+		case /help/i {
+			print "INFO: help me\n";
+		}
+		else { print "WARN: invalid command \"" . $lcmd . "\"\n"; return 0; }
+	}
+}
+sub touch { 
+	my $lfile = $_[0];
+	my $chk = 0;
+
+	open (FH, "> $lfile") or $chk = 1;
+	close(FH);
+
+	return $chk;	
+}
+############## End Modules #########################
