@@ -1,0 +1,72 @@
+#!/bin/sh -- # -*- perl -*-
+#
+# eval statement to find and execute perl
+#
+eval '
+if [ -x /usr/local/bin/perl ]
+then
+	exec /usr/local/bin/perl $0 ${1+"$@"} ;
+elif [ -x /usr/bin/perl ]
+then
+	exec /usr/bin/perl $0 ${1+"$@"} ;
+fi'	
+if 0;
+############## Start Summary #######################
+#
+# Application Name: Dope Notes
+# Component Name: dnsrv
+# Author: solcaust
+# Date: 10/26/2010
+# Notes: Dope Notes is a simple text based note keeper. 
+#	 dnsrv - is the server component for managing the notes.
+#
+#	Functions:
+#		- Track and Manage meta and data files
+#		- accept requests from clients
+#		- View - Edit - Create - Delete new notes
+#		- Track and Manage client connections to the server
+#
+# solcaust	10/26/2010	Intial write of the server component
+#
+############## End Summary #########################
+#
+### Modules ###
+use strict;
+use IO::Socket;
+use Net::hostent;    
+use Getopt::Long;
+use Switch;
+use Data::Dumper;
+use File::Copy;
+use Cwd 'abs_path';
+use File::Basename;
+use XML::Simple;
+#
+### Version Details ###
+my $MAJOR = 0;
+my $MINOR = 0;
+my $RELEASE = 1;
+my @ver = ($MAJOR, $MINOR, $RELEASE);
+#
+############## Start Globals #######################
+### Globals ###
+my ($kbexe, $kbhome) =fileparse(abs_path($0));
+$kbhome =~ s/\/bin\///;
+my $kbdir = $kbhome;
+my $debug=0;
+my $command;
+my $option;
+my $version;
+my $user = getlogin();
+my @kbfiles;
+my $config;
+
+### Command Line Options ###
+GetOptions( "debug+"=>\$debug,
+            "command:s",\$command,
+            "xconfig:s",\$config,
+            "option:s",\$option,
+            "directory:s",\$kbdir,
+            "version",\$version);
+
+
